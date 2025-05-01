@@ -1497,6 +1497,50 @@ class TestWorkflows(
         doc.refresh_from_db()
         self.assertEqual(doc.owner, self.user2)
 
+    def test_workflow_scheduled_trigger_custom_field_negative_offset(self):
+        """
+        GIVEN:
+            - Existing workflow with SCHEDULED trigger WITH A NEGATIVE DAY OFFSET against a custom field and action that assigns owner
+            - Existing doc that matches the trigger
+        WHEN:
+            - Scheduled workflows are checked
+        THEN:
+            - Workflow runs, document owner is updated
+        """
+        trigger = WorkflowTrigger.objects.create(
+            type=WorkflowTrigger.WorkflowTriggerType.SCHEDULED,
+            schedule_offset_days=-2,
+            schedule_date_field=WorkflowTrigger.ScheduleDateField.CUSTOM_FIELD,
+            schedule_date_custom_field=self.cf1,
+        )
+        action = WorkflowAction.objects.create(
+            assign_title="Doc assign owner",
+            assign_owner=self.user2,
+        )
+        w = Workflow.objects.create(
+            name="Workflow 1",
+            order=0,
+        )
+        w.triggers.add(trigger)
+        w.actions.add(action)
+        w.save()
+
+        doc = Document.objects.create(
+            title="sample test",
+            correspondent=self.c,
+            original_filename="sample.pdf",
+        )
+        CustomFieldInstance.objects.create(
+            document=doc,
+            field=self.cf1,
+            value_date=timezone.now() + timedelta(days=1),
+        )
+
+        tasks.check_scheduled_workflows()
+
+        doc.refresh_from_db()
+        self.assertEqual(doc.owner, self.user2)
+
     def test_workflow_scheduled_already_run(self):
         """
         GIVEN:
